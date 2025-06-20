@@ -1,5 +1,6 @@
 mod shell;
 mod model;
+mod gui;
 
 use std::collections::HashMap;
 use std::io::{self, Write};
@@ -11,11 +12,12 @@ use colored::*;
 use std::path::PathBuf;
 use shell::Shell;
 use crate::model::Model;
+use crate::gui::LlmTermApp;
 
-#[derive(Serialize, Deserialize)]
-struct Config {
-    model: Model,
-    max_tokens: i32
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Config {
+    pub model: Model,
+    pub max_tokens: i32
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,9 +40,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("Disable cache and always query the LLM")
                 .action(clap::ArgAction::SetTrue),
         )
+        .arg(
+            Arg::new("gui")
+                .short('g')
+                .long("gui")
+                .help("Launch GUI interface")
+                .action(clap::ArgAction::SetTrue),
+        )
         .get_matches();
 
     let config_path = get_default_config_path().expect("Failed to get default config path");
+
+    // Launch GUI if requested
+    if matches.get_flag("gui") {
+        let options = eframe::NativeOptions {
+            viewport: egui::ViewportBuilder::default()
+                .with_inner_size([1200.0, 800.0])
+                .with_title("LLM Terminal"),
+            ..Default::default()
+        };
+        
+        return eframe::run_native(
+            "LLM Terminal",
+            options,
+            Box::new(|cc| Ok(Box::new(LlmTermApp::new(cc)))),
+        ).map_err(|e| format!("Failed to run GUI: {}", e).into());
+    }
 
     if matches.get_flag("config") {
         let config = create_config()?;
@@ -100,13 +125,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn get_default_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub fn get_default_config_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let exe_path = std::env::current_exe()?;
     let exe_dir = exe_path.parent().ok_or("Failed to get executable directory")?;
     Ok(exe_dir.join("config.json"))
 }
 
-fn load_or_create_config(path: &PathBuf) -> Result<Config, Box<dyn std::error::Error>> {
+pub fn load_or_create_config(path: &PathBuf) -> Result<Config, Box<dyn std::error::Error>> {
     if let Ok(content) = fs::read_to_string(path) {
         Ok(serde_json::from_str(&content)?)
     } else {
@@ -151,13 +176,13 @@ fn create_config() -> Result<Config, io::Error> {
     })
 }
 
-fn get_cache_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub fn get_cache_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let exe_path = std::env::current_exe()?;
     let exe_dir = exe_path.parent().ok_or("Failed to get executable directory")?;
     Ok(exe_dir.join("cache.json"))
 }
 
-fn load_cache(path: &PathBuf) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+pub fn load_cache(path: &PathBuf) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
     if let Ok(content) = fs::read_to_string(path) {
         Ok(serde_json::from_str(&content)?)
     } else {
